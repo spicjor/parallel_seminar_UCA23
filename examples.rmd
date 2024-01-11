@@ -1,0 +1,78 @@
+---
+title: "Parallel computing in R. A brief introduction and a few examples"
+author:
+    - names: "Sergio Picó Jordá"
+    - affiliations: INMAR, Departamento de Biología, Universidad de Cádiz.
+date: "`r Sys.Date()`"
+output:
+    distill::distill_article:
+        highlight: kate
+        code_folding: false
+        toc: true
+        toc_depth: 3
+        css: styles.css
+editor_options:
+    chunk_output_type: console
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+
+# Parallel computing in R. A brief introduction and a few examples.
+
+
+
+## What is parallel computing?
+Parallel computation is the simultaneous executions of different pieces of a
+(normally large) computation across multiple processors or cores. The interest of
+this technique is that you can execute a process that takes *x* seconds on a
+single processor in *x/n* seconds using *n* processors (this is the ideal case,
+that is rarely possible to achieve).
+
+We can use this in a supercomputer (like the [UCA's
+cluster](https://supercomputacion.uca.es/)), but also in almost any device with multiple processors or cores. And happily nowadays most of our PCs and laptops have multicore processors.
+
+How serial computing sometimes looks like in our
+computers, as it happens most of the time in R (awesome GIF from my WOT gaming years):
+
+![CPU 0 doing all the heavy lifting](https://tenor.com/view/wot-cpu-danceing-break-dancing-cool-gif-16563810.gif)
+
+Instead, we want our cores to be a team!:
+
+![Teamwork!](https://media.giphy.com/media/qowPpT1lFY89MN2BVn/giphy.gif)
+
+
+
+## How to do parallel computing in R
+
+Ok, so how does this work? We need to create a structure that sets a *director node* that is going to distribute data and functions between the *workers*, that will execute the interactions. This structure will allocate and manage the resorces, like number of cores, RAM memory and so. I will show you two different systems: **FORK** and
+**PSOCK**.
+
+## Examples
+
+### Making apply functions parallel
+
+We can make the functions from the *apply* family parallel , [example by Jens Moll-Elsborg](https://towardsdatascience.com/getting-started-with-parallel-programming-in-r-d5f801d43745). Create the data:
+
+```{create data}
+# Create a vector with 1 billion elements
+data <- 1:1e9
+
+# Make a list of 4 of these vectors
+data_list <- list("1" = data,
+                  "2" = data,
+                  "3" = data,
+                  "4" = data
+)
+```
+Calculate the mean 
+
+```{serial examples}
+# Calculate the mean of every vector
+time_benchmark <- system.time(
+    lapply(data_list, mean)
+)
+time_benchmark # Total of 12.83s in my machine
+```
