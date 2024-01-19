@@ -69,10 +69,31 @@ data_list <- list("1" = data,
 ```
 Calculate the mean 
 
-```{serial examples}
+```{serial mean}
 # Calculate the mean of every vector
 time_benchmark <- system.time(
     lapply(data_list, mean)
 )
 time_benchmark # Total of 12.83s in my machine
 ```
+This is fine, but let's make our cores share the effort:
+
+```{parallel mean}
+# Load package paralell
+library(parallel)
+
+# Detect number of cores, create a local cluster
+parallel::detectCores()
+cl <- parallel::makeCluster(8)
+
+# Run the same process but in parallel
+time_parallel  <- system.time(
+    parallel::parLapply(cl,
+                        data_list,
+                        mean)
+)
+
+# Stop cluster
+parallel::stopCluster(cl)
+```
+
