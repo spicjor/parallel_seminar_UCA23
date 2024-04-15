@@ -78,8 +78,22 @@ time_benchmark # Total of 12.83s in my machine
 ```
 This is fine, but let's make our cores share the effort:
 
-```{parallel mean}
-# Load package paralell
+Linux/Mac version:
+
+```{parallel mean linux/mac}
+# Load package parallel
+library(parallel)
+detectCores()
+
+parallel::mclapply(1:10, function(x) {
+                   mean(data_list)
+          },       mc.cores = 8)
+```
+
+Windows version:
+
+```{parallel mean windows}
+# Load package parallel
 library(parallel)
 
 # Detect number of cores, create a local cluster
@@ -95,5 +109,143 @@ time_parallel  <- system.time(
 
 # Stop cluster
 parallel::stopCluster(cl)
+```
+
+### Running a loop in parallel
+
+We can also parallelise a for loop.
+
+Linux/Mac version:
+
+```{loop parallel Linux/Mac}
+# Load packages
+library(doParallel)
+library(parallel)
+library(foreach)
+
+# Activate the cluster for foreach
+doParallel::registerDoParallel(cores = 8)
+
+# Calculate mean
+time_foreach <- system.time({
+     r <- foreach(i = 1:length(data_list),
+                  .combine = rbind) %dopar% {
+          mean(data_list[[i]])
+     }
+}
+)
+
+time_foreach[3]
+```
+
+Windows version:
+
+```{loop parallel windows}
+library(doParallel)
+library(parallel)
+library(foreach)
+
+# Detect number of cores and create cluster
+cl <- parallel::makeCluster(detectCores())
+
+# Activate the cluster for foreach
+doParallel::registerDoParallel(cl)
+
+# Calculate mean
+time_foreach <- system.time({
+    r <- foreach(i = 1:length(data_list),
+                 .combine = rbind) %dopar% {
+         mean(data_list[[i]])
+    }
+}
+)
+
+time_foreach[3]
+
+# Stop cluster
+parallel::stopCluster(cl)
+```
+
+
+### A real example: Random forest with ranger
+
+This is a great example showed by Blas Benito in [his blog](https://www.blasbenito.com/post/02_parallelizing_loops_with_r/).
+
+```{load packages}
+library(palmerpenguins)
+library(ranger)
+```
+
+The goal of this process is to classify penguins from different species using measurements of bill length, bill depth, flipper length, and body mass. Prepare the data:
+
+```{prepare data}
+penguins <- as.data.frame(
+    na.omit(
+        penguins[, c("species",
+                     "bill_length_mm",
+                     "bill_depth_mm",
+                     "flipper_length_mm",
+                     "body_mass_g"
+        )]
+    )
+)
+```
+
+Now, fit a random forest model using the *ranger* package:
+
+```{fit rf}
+
+# Fit model
+m <- ranger::ranger(
+    data = penguins,
+    dependent.variable.name = "species",
+    importance = "permutation"
+)
+
+# Check results
+m
+m$variable.importance
+
+```
+
+Now, let's do a grid search for hyperparameter optimization. We are going to fit many models with diferent hyperparameter combinations to find the combination with the best prediction error. Hyperparameters: number of trees (num.trees), number of variables selected by chance for a tree split (mtry), mminimum number of cases in a terminal node (min.node.size).
+
+```{optimization}
+
+# Create a table with all combinations
+sensitivity.df  <- expand.grid(
+    num.trees = c(500, 1000, 1500),
+    mtry = 2:4,
+    min.node.size = c(1, 10, 20)
+)
+
+# 27 combinations of hyperparameters
+
+# Create and register cluster
+cl <- parallel:makeCluster(8)
+doParallel::registerDoParallel(cl)
+
+# Fit models
+prediction.error <- foreach(
+# Iterate over the hyperparameter data frame
+    num.trees = sensitivity.df$num.trees,
+    mtry = sensitivity.df$mtry,
+    min.node.size = sensitivity.df$min.node.size,
+    .combine = "c",
+    . packages = "ranger"
+) %dopar% {
+
+    # Fit model
+    m.i <- ranger::ranger(
+        data = penguins,
+        dependent.variable.name = "species",
+        num.trees = num.trees,
+        mtry = mtry,
+        min.node.size = min.node.size
+    )
+return(m.i$prediction.error * 100)
+}
+
+# 
 ```
 
