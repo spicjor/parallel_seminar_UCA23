@@ -6,6 +6,9 @@ library(palmerpenguins)
 library(ranger)
 library(ggplot2)
 library(dplyr)
+library(future)
+library(purrr)
+library(furrr)
 
 # Prepare data-----------------------------------
 
@@ -150,3 +153,40 @@ ggplot2::ggplot(data = sensitivity.df) +
 best.hyperparameters <- sensitivity.df %>%
     dplyr::arrange(prediction.error) %>%
     dplyr::slice(1)
+
+
+
+# Parallel computing + the tidyverse: future and furrr------------
+
+# Remember the first example?
+# Serial mean
+time_benchmark <- system.time(
+    lapply(data_list, mean)
+)
+time_benchmark
+
+# For those of you that don't know how to use map
+time_map <- system.time(
+    purrr::map(data_list, mean)
+)
+time_map
+
+# Let's make map parallel
+# Check number of cores
+future::availableCores()
+
+# Windows
+plan(cluster, workers = 4)
+# Or explicitly
+cl <- parallel::makeCluster(4)
+plan(cluster, workers = cl)
+
+# Mac and Linux
+plan(multicore, workers = 4)
+
+
+# Calculate the mean in parallel
+time_future <- system.time(
+    furrr::future_map(data_list, mean)
+)
+time_future

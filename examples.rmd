@@ -277,6 +277,42 @@ best.hyperparameters <- sensitivity.df %>%
     dplyr::slice(1)
 ```
 
+
+
+### Parallel computing in the tidyverse: *future* and *furrr*
+
+If you like tidyverse and use *map()*, you may have thought about how good would be to use that family of functions in parallel. [*Furrr*](https://furrr.futureverse.org/) combines the [*purrr*](https://purrr.tidyverse.org/reference/map.html) family of mapping functions with [*futures*](https://future.futureverse.org/)'s parallel processing capabilities. For example, we can replace the original *map()* for *future_map()* to map in parallel!
+
+Do you remember our first example? We could have done it using map too:
+
+```{map}
+time_map <- system.time(
+    purrr::map(data_list, mean)
+)
+time_map
+time_benchmark
+```
+
+It took the same time than using lapply, because it is being executed serially. Let's make map parallel:
+
+```{furrr}
+# Check the number of cores available
+future::availableCores()
+
+# Cluster for Windows
+plan(cluster, workers = 4)
+
+# Cluster for Linux and Mac
+plan(multicore, workers = 4)
+
+# Calculate the mean in parallel
+time_future <- system.time(
+    furrr::future_map(data_list, mean)
+)
+time_future
+```
+We reduced the processing time to one third, it works!
+
 ### Final considerations
 
 When we compute things in parallel we have to be aware of how much RAM each process will need. We may have to lower the number of cores used.
