@@ -2,8 +2,10 @@
 library(parallel)
 library(foreach)
 library(doParallel)
-
-
+library(palmerpenguins)
+library(ranger)
+library(ggplot2)
+library(dplyr)
 
 # Prepare data-----------------------------------
 
@@ -63,3 +65,88 @@ time_foreach
 
 # Stop the cluster
 parallel::stopCluster(cl)
+
+
+
+# A real example: Random forest with ranger--------
+
+# Prepare data
+penguins <- as.data.frame(
+    na.omit(
+        penguins[, c("species",
+                     "bill_length_mm",
+                     "bill_depth_mm",
+                     "flipper_length_mm",
+                     "body_mass_g"
+        )]
+    )
+)
+
+# Fit a random forest model
+m <- ranger::ranger(
+    data = penguins,
+    dependent.variable.name = "species",
+    importance = "permutation"
+)
+
+# Check results
+m
+m$variable.importance
+
+# Hyperparameter optimization
+
+# Create a data frame with all the possible combinations of hyperparameters
+sensitivity.df <- expand.grid(
+    num.trees = c(500, 1000, 1500),
+    mtry = 2:4,
+    min.node.size = c(1, 10, 20)
+)
+
+# Create and register cluster
+cl <- parallel::makeCluster(8)
+doParallel::registerDoParallel(cl)
+
+# Fit models in parallel
+prediction.error <- foreach(
+    # Iterate over the rows of the hyperparameter data frame
+    num.trees = sensitiviy.df$num.trees,
+    mtry = sensitiviy.df$mtry,
+    min.node.size = sensitiviy.df$min.node.size,
+    .combine = "c",
+    .packages = "ranger"
+) %dopar% {
+    # Fit the model
+    m.i <- ranger::ranger(
+        data = penguins,
+        dependent.variable.name = "species",
+        num.trees = num.trees,
+        mtry = mtry,
+        min.node.size = min.node.size
+    )
+# Return the prediction error
+return(m.i$prediction.error * 100)
+}
+
+# Add the prediction error to the data frame
+sensitivity.df$prediction.error <- prediction.error
+
+# Stop the cluster
+parallel::stopCluster(cl)
+
+# Plot the results
+ggplot2::ggplot(data = sensitivity.df) +
+    ggplot2::aes(
+        x = mtry,
+        y = as.factor(min.node.size),
+        fill = prediction.error
+    ) +
+    ggplot2::facet_wrap(as.factor(sensitivity.df$num.trees)) +
+    ggplot2::geom_tile() +
+    ggplot2::scale_y_discrete(breaks = c(1, 10, 20)) +
+    ggplot2::scale_fill_viridis_c() +
+    ggplot2::ylab("min.node.size")
+
+# Find the combination with the lower prediction error
+best.hyperparameters <- sensitivity.df %>%
+    dplyr::arrange(prediction.error) %>%
+    dplyr::slice(1)

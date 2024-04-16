@@ -167,7 +167,7 @@ parallel::stopCluster(cl)
 ```
 
 
-### A real example: Random forest with ranger
+### A real example: Random forest with *ranger*
 
 This is a great example showed by Blas Benito in [his blog](https://www.blasbenito.com/post/02_parallelizing_loops_with_r/).
 
@@ -246,6 +246,41 @@ prediction.error <- foreach(
 return(m.i$prediction.error * 100)
 }
 
-# 
+# Add the prediction error column to the data frame
+sensitivity.df$prediction.error <- prediction.error
+
+# Stop the cluster
+parallel::stopCluster(cl)
 ```
 
+Let's plot the results:
+
+```{plot sensitivity}
+ggplot2::ggplot(data = sensitivity.df) +
+    ggplot2::aes(
+        x = mtry,
+        y = as.factor(min.node.size),
+        fill = prediction.error
+    ) +
+    ggplot2::facet_wrap(as.factor(sensitivity.df$num.trees)) +
+    ggplot2::geom_tile() +
+    ggplot2::scale_y_discrete(breaks = c(1, 10, 20)) +
+    ggplot2::scale_fill_viridis_c() +
+    ggplot2::ylab("min.node.size")
+```
+
+Now let's find the combination of hyperparameters with the lowest prediction error:
+
+```{best hyper}
+best.hyperparameters <- sensitivity.df %>%
+    dplyr::arrange(prediction.error) %>%
+    dplyr::slice(1)
+```
+
+### Final considerations
+
+When we compute things in parallel we have to be aware of how much RAM each process will need. We may have to lower the number of cores used.
+
+Be careful with what object you decide to return from each iteration. If you return a whole model each time, the object where you are storing your results could grow very fast.
+
+Also, the communication between workers can be a limitation. If big files have to be transfered many times, it could offset the process time we reduced by parallelization.
